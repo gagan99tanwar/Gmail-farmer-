@@ -25,8 +25,6 @@ bot_client = TelegramClient(
     API_HASH
 )
 
-pending_users = set()
-
 
 @bot_client.on(events.NewMessage(pattern=r"^/start$"))
 async def start(event):
@@ -39,7 +37,8 @@ async def start(event):
 
 @bot_client.on(events.NewMessage(pattern=r"^/register$"))
 async def register(event):
-    pending_users.add(event.sender_id)
+    user_id = event.sender_id
+    pending_users.add(user_id)
 
     await user_client.send_message(
         FARMER_USERNAME,
@@ -53,7 +52,8 @@ async def register(event):
 
 @bot_client.on(events.NewMessage(pattern=r"^/balance$"))
 async def balance(event):
-    pending_users.add(event.sender_id)
+    user_id = event.sender_id
+    pending_users.add(user_id)
 
     await user_client.send_message(
         FARMER_USERNAME,
@@ -67,9 +67,7 @@ async def balance(event):
 
 @user_client.on(events.NewMessage())
 async def farmer_response(event):
-
     sender = await event.get_sender()
-
     username = getattr(sender, "username", None)
 
     if not username:
@@ -80,38 +78,33 @@ async def farmer_response(event):
 
     text = event.raw_text or ""
 
-    # Sensitive information is intentionally not relayed.
-    blocked_terms = (
-        "password",
-        "otp",
-        "verification code",
-        "app password",
-        "secret key",
-        "authentication",
-        "authenticator",
-        "qr code"
-    )
+    # Send the response only to users currently waiting.
+    users = list(pending_users)
 
-    if any(term in text.lower() for term in blocked_terms):
-        return
-
-    for user_id in list(pending_users):
-
+    for user_id in users:
         try:
-            await bot_client.send_message(
-                user_id,
-                text or "Status update received."
-            )
+            if event.media:
+                await bot_client.send_file(
+                    user_id,
+                    event.media,
+                    caption=text or None
+                )
+            elif text:
+                await bot_client.send_message(
+                    user_id,
+                    text
+                )
+
+            pending_users.discard(user_id)
 
         except Exception as e:
             print(
-                f"Could not message {user_id}: {e}"
+                f"Relay error for {user_id}: {e}"
             )
-
-    pending_users.clear()
 
 
 async def main():
+    print("Starting...")
 
     await user_client.start()
 
