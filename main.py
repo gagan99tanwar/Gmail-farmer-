@@ -5,7 +5,7 @@ import tempfile
 from dataclasses import dataclass
 
 from aiohttp import web
-from telethon import TelegramClient
+from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
 from telegram import (
